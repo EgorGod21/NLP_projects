@@ -75,6 +75,9 @@ class Head(nn.Module):
         self.query = nn.Linear(n_embd, head_size, bias=False)
         self.value = nn.Linear(n_embd, head_size, bias=False)
         self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))
+        self.alpha = nn.Parameter(torch.ones(1))
+        self.beta = nn.Parameter(torch.zeros(1))
+        self.gamma = nn.Parameter(torch.zeros(1))
 
         self.dropout = nn.Dropout(dropout)
 
@@ -91,7 +94,12 @@ class Head(nn.Module):
         wei = self.dropout(wei)
         # perform the weighted aggregation of the values
         v = self.value(x) # (B,T,hs)
-        out = wei @ v # (B, T, T) @ (B, T, hs) -> (B, T, hs)
+        alpha_matrix = self.alpha * torch.eye(T, device=device)
+        beta_matrix = self.beta * wei
+        # centerd matrix
+        C_mat = torch.ones(T, T, device=device) / T
+        gamma_matrix = self.gamma * C_mat
+        out = (alpha_matrix + beta_matrix - gamma_matrix) @ v # (B, T, T) @ (B, T, hs) -> (B, T, hs)
         return out
 
 class MultiHeadAttention(nn.Module):
@@ -100,12 +108,11 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
-        self.proj = nn.Linear(head_size * num_heads, n_embd)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         out = torch.cat([h(x) for h in self.heads], dim=-1)
-        out = self.dropout(self.proj(out))
+        out = self.dropout(out)
         return out
 
 class FeedFoward(nn.Module):
