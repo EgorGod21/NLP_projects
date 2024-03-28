@@ -133,12 +133,15 @@ class Block(nn.Module):
         head_size = n_embd // n_head
         self.sa = MultiHeadAttention(n_head, head_size)
         self.ffwd = FeedFoward(n_embd)
-        self.ln1 = nn.LayerNorm(n_embd)
-        self.ln2 = nn.LayerNorm(n_embd)
+        self.ln = nn.LayerNorm(n_embd)
+
+        self.alpha_comb = nn.Parameter(torch.ones(1))
+        self.beta_ff = nn.Parameter(torch.ones(1))
+        self.gamma_sa = nn.Parameter(torch.ones(1))
 
     def forward(self, x):
-        x = x + self.sa(self.ln1(x))
-        x = x + self.ffwd(self.ln2(x))
+        x_norm = self.ln(x)
+        x = self.alpha_comb * x + self.beta_ff * self.ffwd(x_norm) + self.gamma_sa * self.sa(x_norm)
         return x
 
 class GPTLanguageModel(nn.Module):
@@ -149,7 +152,6 @@ class GPTLanguageModel(nn.Module):
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
         self.position_embedding_table = nn.Embedding(block_size, n_embd)
         self.blocks = nn.Sequential(*[Block(n_embd, n_head=n_head) for _ in range(n_layer)])
-        self.ln_f = nn.LayerNorm(n_embd) # final layer norm
         self.lm_head = nn.Linear(n_embd, vocab_size)
 
         # better init, not covered in the original GPT video, but important, will cover in followup video
@@ -171,7 +173,7 @@ class GPTLanguageModel(nn.Module):
         pos_emb = self.position_embedding_table(torch.arange(T, device=device)) # (T,C)
         x = tok_emb + pos_emb # (B,T,C)
         x = self.blocks(x) # (B,T,C)
-        x = self.ln_f(x) # (B,T,C)
+
         logits = self.lm_head(x) # (B,T,vocab_size)
 
         if targets is None:
