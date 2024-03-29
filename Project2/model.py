@@ -133,12 +133,15 @@ class Block(nn.Module):
         head_size = n_embd // n_head
         self.sa = MultiHeadAttention(n_head, head_size)
         self.ffwd = FeedFoward(n_embd)
-        self.ln1 = nn.LayerNorm(n_embd)
-        self.ln2 = nn.LayerNorm(n_embd)
+        self.ln = nn.LayerNorm(n_embd)
+
+        self.alpha_comb = nn.Parameter(torch.ones(1))
+        self.beta_ff = nn.Parameter(torch.ones(1))
+        self.gamma_sa = nn.Parameter(torch.ones(1))
 
     def forward(self, x):
-        x = x + self.sa(self.ln1(x))
-        x = x + self.ffwd(self.ln2(x))
+        x_norm = self.norm(x)
+        x = self.alpha_comb * x + self.beta_ff * self.ffwd(x_norm) + self.gamma_sa * self.sa(x_norm)
         return x
 
 class GPTLanguageModel(nn.Module):
