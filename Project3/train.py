@@ -16,8 +16,8 @@ NUM_CLASSES = 2
 EPOCHS = 3
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-train_data = pd.read_csv('train.csv')
-valid_data = pd.read_csv('valid.csv')
+train_data = pd.read_csv('data/train.csv')
+valid_data = pd.read_csv('data/valid.csv')
 
 model = BertForSequenceClassification.from_pretrained(MODEL_PATH)
 tokenizer = BertTokenizer.from_pretrained(TOKENIZER_PATH)

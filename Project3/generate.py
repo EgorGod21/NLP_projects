@@ -8,7 +8,7 @@ from pred import predict
 TOKENIZER_PATH = 'cointegrated/rubert-tiny'
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-test_data = pd.read_csv('test.csv')
+test_data = pd.read_csv('data/test.csv')
 
 texts = list(test_data['text'])
 labels = list(test_data['labels'])
