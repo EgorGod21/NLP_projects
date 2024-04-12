@@ -1,8 +1,8 @@
 import torch
 import numpy as np
 import time
-import pickle
 import sys
+import json
 sys.path.append('models')
 
 from create_model import create_model
@@ -11,7 +11,7 @@ from create_model import create_model
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 batch_size = 64
 block_size = 128
-max_iters = 100
+max_iters = 5000
 eval_interval = 100
 learning_rate = 1e-3
 eval_iters = 200
@@ -105,7 +105,13 @@ for iter in range(max_iters):
 path_to_save = f'models_save/model_{model_name}.pth'
 torch.save(model.state_dict(), path_to_save)
 
-with open(f'training_results/data_{model_name}.pkl', 'wb') as f:
-    pickle.dump(losses_dict, f)
-    pickle.dump(perplexities, f)
-    pickle.dump(times, f)
+data = {
+    'losses_dict': losses_dict,
+    'perplexities': perplexities,
+    'times': times
+}
+
+file_name = f'training_results/{model_name}.json'
+
+with open(file_name, 'w') as f:
+    json.dump(data, f)
