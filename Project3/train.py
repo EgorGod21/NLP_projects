@@ -1,60 +1,50 @@
-import pandas as pd
+from datasets import load_dataset
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import transformers
+from colorama import Fore, Style
 
-import torch
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from transformers import BertTokenizer, BertForSequenceClassification
-from transformers import get_linear_schedule_with_warmup
+model_name = "cointegrated/rut5-small"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
-from custom_dataset import CustomDataset
-from fit_eval import fit, eval
+dataset = load_dataset("RussianNLP/Mixed-Summarization-Dataset")
 
-MODEL_PATH = 'cointegrated/rubert-tiny'
-TOKENIZER_PATH = 'cointegrated/rubert-tiny'
-MODEL_SAVE_PATH = 'best_model.pt'
-NUM_CLASSES = 2
-EPOCHS = 3
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+train_dataset = dataset['train'].shuffle(seed=42).select(range(10_000))
+val_dataset = dataset['train'].shuffle(seed=42).select(range(10_000, 12_000))
 
-train_data = pd.read_csv('data/train.csv')
-valid_data = pd.read_csv('data/valid.csv')
+def preprocess_function(examples):
+    model_inputs = tokenizer(examples["text"], max_length=1024, truncation=True)
 
-model = BertForSequenceClassification.from_pretrained(MODEL_PATH)
-tokenizer = BertTokenizer.from_pretrained(TOKENIZER_PATH)
+    labels = tokenizer(text_target=examples["summary"], max_length=128, truncation=True)
 
-out_features = model.bert.encoder.layer[0].output.dense.out_features
+    model_inputs["labels"] = labels["input_ids"]
+    return model_inputs
 
-model.classifier = torch.nn.Linear(out_features, NUM_CLASSES)
-model.to(device)
+tokenized_train_dataset = train_dataset.map(preprocess_function, batched=True)
+tokenized_val_dataset = val_dataset.map(preprocess_function, batched=True)
 
-train_dataset = CustomDataset(train_data['text'], train_data['labels'], tokenizer)
-valid_dataset = CustomDataset(valid_data['text'], valid_data['labels'], tokenizer)
+data_collator = transformers.DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model)
 
-train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True)
-valid_dataloader = DataLoader(valid_dataset, batch_size=2, shuffle=True)
-
-optimizer = optim.AdamW(model.parameters(), lr=2e-5)
-scheduler = get_linear_schedule_with_warmup(
-    optimizer,
-    num_warmup_steps=0,
-    num_training_steps=len(train_dataloader) * EPOCHS
+training_args = transformers.Seq2SeqTrainingArguments(
+        output_dir="./results",
+        evaluation_strategy="epoch",
+        learning_rate=2e-5,
+        per_device_train_batch_size=4,
+        per_device_eval_batch_size=4,
+        weight_decay=0.01,
+        save_total_limit=3,
+        num_train_epochs=2,
     )
-loss_fn = torch.nn.CrossEntropyLoss().to(device)
 
-best_accuracy = 0
+trainer = transformers.Seq2SeqTrainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized_train_dataset,
+    eval_dataset=tokenized_val_dataset,
+    tokenizer=tokenizer,
+    data_collator=data_collator,
+)
 
-for epoch in range(EPOCHS):
-  print(f'Epoch {epoch + 1}/{EPOCHS}')
-  train_acc, train_loss = fit(model, train_dataset, train_dataloader,
-                              device, loss_fn, optimizer, scheduler)
-  print(f'Train loss {round(train_loss, 4)} accuracy {round(train_acc, 4)}')
+trainer.train()
 
-  val_acc, val_loss = eval(model, valid_dataset, valid_dataloader, device, loss_fn)
-  print(f'Val loss {round(val_loss, 4)} accuracy {round(val_acc, 4)}')
-  print('-' * 10)
-
-  if val_acc > best_accuracy:
-    torch.save(model, MODEL_SAVE_PATH)
-    best_accuracy = val_acc
-
-    model = torch.load(MODEL_SAVE_PATH)
+print(Fore.GREEN + Style.BRIGHT + 'модель сохранена')
