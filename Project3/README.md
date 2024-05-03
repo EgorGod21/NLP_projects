@@ -4,6 +4,8 @@
 
 [Model](https://huggingface.co/cointegrated/rut5-small)
 
+[Save Model](https://drive.google.com/drive/folders/1FxF_OOnqFX_HlgxoHjdgjzeTkz2-kw3p?usp=drive_link)
+
 **For train.py:**
 ```
 input: python train.py
